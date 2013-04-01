@@ -1,5 +1,5 @@
--record(rule {name, lhs, rhs}).
--record(pattern {id, var, func, value}).
+-record(rule, {name, lhs, rhs}).
+-record(pattern, {id, var, func, value}).
 
 
 -record (fields, {id,
@@ -21,19 +21,19 @@
 
 -record(alpha_memory, {%type,
 		       wme_refs, 
-		       succs,
+		       succs, %[{rete_node,type}]
 		       ref_count = 0}).
 -record(constant_test_node, {%type,
 			     field,
 			     value,
-			     out_put_mem = [],
+			     out_put_mem = nil,
 			     children = []}).
 -record(rete_node, {type, %beta-m, join,p-node
-		    children,
-		    parent,
+		    children, %[{rete_node,type}]
+		    parent, %{rete_node,type}
 		    variant}).
 -record(beta_memory, {token_refs,
-		      all_children}).
+		      all_children}).  %[{rete_node,type}]
 -record(join, {amem,
 	       tests,
 	       nearest_ancestor_with_same_amem}).
