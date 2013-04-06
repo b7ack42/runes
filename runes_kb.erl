@@ -1,5 +1,16 @@
 -module(runes_kb).
--export([]).
+-export([init/0,
+	 make_wm_ref/1,
+	 make_token_ref/1,
+	 make_token/3,
+	 insert/3,
+	 delete/2,
+	 get_wme/1,
+	 get_f/2,
+	 get_token/1,
+	 get_nth_wr_from_token/2,
+	 get_all_wme_refs/0
+	]).
 
 -compile(export_all).
 
@@ -26,10 +37,12 @@ make_token(Node,Tr,Wr) ->
 		    node = Node,
 		    children = []},
     Ref = make_token_ref(Token),
-    Parent = get_token(Tr),
-    PChildren = Parent#token.children,
-    Parent1 = Parent#token{children = [Ref|PChildren]},
-    insert(token,Tr,Parent1),
+    if Tr/= nil ->
+	    Parent = get_token(Tr),
+	    PChildren = Parent#token.children,
+	    Parent1 = Parent#token{children = [Ref|PChildren]},
+	    insert(token,Tr,Parent1)
+    end,
     Ref.
     
 
@@ -67,6 +80,8 @@ get_token(Ref) ->
 
 get_nth_wr_from_token(Token_ref,0) ->
     Token_ref#token.wme_ref;    
+get_nth_wr_from_token(nil,_) ->
+    nil;
 get_nth_wr_from_token(Token_ref,Nth) ->
     Nth1 = Nth-1,
     Token = get_token(Token_ref),
