@@ -41,7 +41,9 @@ make_token(Node,Tr,Wr) ->
 	    Parent = get_token(Tr),
 	    PChildren = Parent#token.children,
 	    Parent1 = Parent#token{children = [Ref|PChildren]},
-	    insert(token,Tr,Parent1)
+	    insert(token,Tr,Parent1);
+       true ->
+	    ok
     end,
     Ref.
     
@@ -79,7 +81,8 @@ get_token(Ref) ->
     end.
 
 get_nth_wr_from_token(Token_ref,0) ->
-    Token_ref#token.wme_ref;    
+    Token = get_token(Token_ref),
+    Token#token.wme_ref;    
 get_nth_wr_from_token(nil,_) ->
     nil;
 get_nth_wr_from_token(Token_ref,Nth) ->

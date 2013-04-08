@@ -21,7 +21,7 @@ add_fact(Fact) ->
     runes_engine:add_wme(Fact).
 
 fire() ->
-    ok.
+    runes_agenda:get_conflict_set().
     
 
 

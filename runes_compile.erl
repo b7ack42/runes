@@ -20,18 +20,23 @@ build_or_share_constant_test_node(root_node,Fi,Va) ->
     {ok,Root} = runes_agenda:get_root(),
     build_or_share_constant_test_node(Root,Fi,Va);
 build_or_share_constant_test_node(Parent,Fi,Va) ->
-    {ok,Re} = runes_engine:quarry_child_as(Parent,{c,Fi,Va}),
-    if Re /= nil ->
-	    Re;
+    {Tag,_} = Va,
+    if Tag == con ->
+	    {ok,Re} = runes_engine:quarry_child_as(Parent,{c,Fi,Va}),
+	    if Re /= nil ->
+		    Re;
+	       true ->
+		    Paras = #constant_test_node{field = Fi,
+						value = Va,
+						out_put_mem = nil,
+						parent = Parent,
+						children = []},
+		    {ok,New} = runes_engine:create(constant_test_node,Paras),
+		    runes_engine:c_linkto_pc(New,Parent),
+		    New
+	    end;
        true ->
-	    Paras = #constant_test_node{field = Fi,
-					value = Va,
-					out_put_mem = nil,
-					parent = Parent,
-					children = []},
-	    {ok,New} = runes_engine:create(constant_test_node,Paras),
-	    runes_engine:c_linkto_pc(New,Parent),
-	    New
+	    Parent
     end.
 
 build_or_share_alpha_memory(Cond)->

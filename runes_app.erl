@@ -8,7 +8,7 @@ start(_StartType, _StartArgs) ->
     runes_kb:init(),
     case runes_sup:start_link() of
 	{ok,Pid} ->
-	    runes_agenda:init(),
+	    runes_agenda:start(),
 	    {ok, Pid};
 	Other->
 	    {error,Other}

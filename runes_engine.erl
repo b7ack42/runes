@@ -66,7 +66,7 @@ add_wme(Wme) ->
     root_activation(Wme_ref).
 
 root_activation(Wr) ->
-    Root = runes_agenda:get_root(),
+    {ok,Root} = runes_agenda:get_root(),
     gen_server:cast(Root,{ra,Wr}).
     
 constant_test_node_activation(CNode,Wme_ref) ->
@@ -133,21 +133,23 @@ delete_token_and_descendents(Tr) ->
 	    Wme = runes_kb:get_wme(Wr),
 	    Trs = Wme#wme.token_refs,
 	    Wme1 = Wme#wme{token_refs = lists:delete(Tr,Trs)},
-	    runes_kb:insert(wm,Wr,Wme1)
+	    runes_kb:insert(wm,Wr,Wme1);
+       true -> ok
     end,
     if Pr /= nil ->
 	    Pt0 = runes_kb:get_token(Pr),
 	    Pchn = lists:delete(Tr,Pt0#token.children),
-	    Pt1 = Pt0#token{children = Pchn}
+	    Pt1 = Pt0#token{children = Pchn},
+            runes_kb:insert(token,Pr,Pt1);
+       true -> ok
     end,
-    runes_kb:insert(token,Pr,Pt1),
     remove(token,Tr,Node),
     runes_kb:delete(token,Tr).
 
-relink_to_alpha_memory(Node,Amem)->               %join or negative
-    gen_server:cast(Amem,{rl,Node}).  %relink
+relink_to_alpha_memory(Node,Amem,Ancestor)->               %join or negative
+    gen_server:cast(Amem,{rla,Node,Ancestor}).  %relink
 relink_to_beta_memory(JNode,Bmem) ->
-    gen_server:cast(Bmem,{rl,JNode}).  %relink
+    gen_server:cast(Bmem,{rlb,JNode}).  %relink
     
 %link_to(Node,Tnode) ->
 %    gen_server:cast(Tnode,{ln,Node}).
@@ -176,8 +178,8 @@ quarry_child_as(Node,As) ->
 is_mem_nil(B_or_A) ->		
     gen_server:call(B_or_A,is_nil).
 
-find_ancestor(JNode) ->
-    gen_server:call(JNode,fa).
+%find_ancestor({Node,_Type}) ->
+%    gen_server:call(Node,fa).
 
 is_right_unlinked(Amem) ->
     {ok,Is_ru} = gen_server:call(Amem,rup),
@@ -241,6 +243,7 @@ handle_cast({ca,Wme_ref}, State) ->
     if 	Fi /= no_test ->
 	    Wme = runes_kb:get_wme(Wme_ref),	    
  	    V2 = runes_kb:get_f(Wme,Fi),
+	   % io:format("~p v: ~p, va: ~p~n",[self(),V2, Va]),
  	    if V2 /= Va ->
  		    Flag = 0;
  	       true  ->
@@ -249,11 +252,15 @@ handle_cast({ca,Wme_ref}, State) ->
  	true -> Flag = 1
     end,
     if Flag == 1 ->
-	    if Om /= nil -> alpha_memory_activation(Om, Wme_ref) end,
+	    if Om /= nil -> 
+		    alpha_memory_activation(Om, Wme_ref);
+	       true -> ok
+	    end,
 	    lists:foreach(fun(Cnode) -> constant_test_node_activation(Cnode,Wme_ref) 
-			  end,Chn)
+			  end,Chn);
+       true -> ok
     end,
-    {noreplay,State};
+    {noreply,State};
 
 handle_cast({pa,Tr,Wr},State0) ->
     New_tr = runes_kb:make_token(self(),Tr,Wr),
@@ -283,10 +290,14 @@ handle_cast({jla,Tr,Flag},State) ->
     {Bm,b} = State#rete_node.parent,   %%%%%%type
     Tests = Join_part#join.tests,
     if Flag ->
-	    relink_to_alpha_memory({self(),j},Amem),
-	    {ok, Isnil} = is_mem_nil(Amem),
+	    {ok,Isnil} = is_mem_nil(Amem),
+	    Ancesotr = find_ancestor(State),
+	    relink_to_alpha_memory({self(),j},Amem,Ancesotr),
+	    %{ok, Isnil} = is_mem_nil(Amem),
 	    if Isnil -> 
-		    dislink_to(self(),Bm)  %%% dislink
+		    dislink_to(self(),Bm) ; %%% dislink
+	       true ->
+		    ok
 	    end;
        true ->
 	    Isnil = false
@@ -299,9 +310,11 @@ handle_cast({jla,Tr,Flag},State) ->
 					  Children = State#rete_node.children,
 					  lists:foreach(fun(Pair) ->
 								left_activation(Pair,Tr,Wr,off)
-							end,Children)
+							end,Children);
+				     true -> ok
 				  end
-			  end,Mem)
+			  end,Mem);
+       true -> ok
     end,
     {noreply,State};
 
@@ -314,7 +327,8 @@ handle_cast({jra,Wr,Flag},State) ->
 	    relink_to_beta_memory(self(),Bm),
 	    {ok,Isnil} = is_mem_nil(Bm),
 	    if Isnil -> 
-		    dislink_to(self(),Amem)   %%%dislink
+		    dislink_to(self(),Amem);   %%%dislink
+	       true -> ok			
 	    end;
        true ->
 	    Isnil = false
@@ -327,7 +341,8 @@ handle_cast({jra,Wr,Flag},State) ->
 					Children = State#rete_node.children,
 				        lists:foreach(fun(Pair) ->
 							      left_activation(Pair,Tr,Wr,off)	
-						      end,Children)
+						      end,Children);
+				     true -> ok
 				  end
 			  end,Mem)
     end,
@@ -343,7 +358,8 @@ handle_cast({fra,New},State) ->
 			  lists:foreach(fun(Tr) ->
 						Pass_or_no = perform_join_tests(Tests,Tr,Wr),
 						if Pass_or_no ->
-							left_activation(New,Tr,Wr,off)
+							left_activation(New,Tr,Wr,off);
+						   true -> ok
 						end
 					end,Trs)
 		  end,Wrs),
@@ -353,12 +369,12 @@ handle_cast({fra,New},State) ->
 handle_cast({dl,Node},State0) ->   %join_node dislink from bm or am
     Type = type_of(State0),
     case Type of
-	bm ->
+	b ->
 	    Children0 = State0#rete_node.children,
 	    Children1 = lists:delete({Node,j},Children0),
 	    State1 = State0#rete_node{children = Children1},
 	    {noreply,State1};    
-	am ->
+	a ->
 	    Succs0 = State0#alpha_memory.succs,
 	    Succs1 = lists:delete(Node,Succs0),  %Node = {node,type}
 	    State1 = State0#alpha_memory{succs = Succs1},
@@ -378,29 +394,24 @@ handle_cast(dlr,State) ->
 	    Am = State#rete_node.variant#join.amem,
 	    dislink_to({self(),Type},Am);
 	_ -> 
-	   % LOG("no_such_drl~p~p~n",Type)
 	    io:format("no such node as ~p:~p",[Type,self()])
     end,
     {noreply,State};
 
-handle_cast({rl,Node},State0) ->
-    Type = type_of(State0),
-    case Type of
-	b ->
-	    Children0 = State0#rete_node.children,
-	    Children1 = [{Node,j}|Children0],
-	    State1 = State0#rete_node{children = Children1},
-	    {noreply,State1};
-	a ->
-	    Succs0 = State0#alpha_memory.succs,
-	    Ancestor = find_ancestor(Node),  %Node = {node,type}
-	    Succs1 = insert_after(Node,Ancestor,Succs0),
-	    State1 = State0#alpha_memory{succs =Succs1},	    
-	    {noreply,State1};
-	_ ->
-	    %LOG("no such node as ~p : ~p~n",[Type,self()])
-	    io:format("no such node as ~p:~p",[Type,self()])
-    end;
+handle_cast({rlb,Node},State0) ->
+    Children0 = State0#rete_node.children,
+    Children1 = [{Node,j}|Children0],
+    State1 = State0#rete_node{children = Children1},
+    {noreply,State1};
+
+handle_cast({rla,Node,Ancestor},State0) ->
+    %io:format("Node: ~p, Ancestor: ~p~n",[Node,Ancestor]),
+    Succs0 = State0#alpha_memory.succs,
+    Succs1 = insert_after(Node,Ancestor,Succs0),
+    State1 = State0#alpha_memory{succs =Succs1},	  
+    %io:format("Succ1: ~p",[Succs1]),
+    {noreply,State1};
+
 
 handle_cast({ln,Node},State0) ->
     Type = type_of(State0),
@@ -460,7 +471,7 @@ handle_cast({p2p,P_n},State) ->
     {noreply,State#rete_node{children=[{P_n,p}|Chn]}};
 
 handle_cast({rw,Wme_ref},State0) ->
-    %%State0=alpha_memory
+    %State0=alpha_memory
     Wme_refs0 = State0#alpha_memory.wme_refs,
     Wme_refs1 = lists:delete(Wme_ref,Wme_refs0),
     State1 = State0#alpha_memory{wme_refs = Wme_refs1},
@@ -468,9 +479,12 @@ handle_cast({rw,Wme_ref},State0) ->
 	    Succs = State0#alpha_memory.succs,
 	    lists:foreach(fun({Succ,Type})->
 				  if Type == j ->
-					  dislink_left(Succ)
+					  dislink_left(Succ);
+				     true ->
+					  ok
 				  end
-			  end,Succs)      
+			  end,Succs)      ;
+       true -> ok
     end,
     {norepy,State1};
 
@@ -486,7 +500,8 @@ handle_cast({rt,Tr},State0) ->
 		    ChnT = State0#rete_node.children,
 		    lists:foreach(fun({Ch,_}) ->
 					  dislink_right(Ch)   %????
-				  end,ChnT)
+				  end,ChnT);
+	       true -> ok
 	    end,
 	    {noreply,State1};
 	_ ->
@@ -678,26 +693,7 @@ handle_call({ul,Type},From,State0) ->   %Node = {NPid,Type}
 	   % LOG("no_such_type in ul ~p",Tp),
 	    io:format("no such node in ~p ~n",Tp),
 	    {reply,{ok,false},State0}
-    end;
-
-handle_call(fa,_From,State) ->			      
-    #join{amem = Amem,nearest_ancestor_with_same_amem = Ancestor0} = State#rete_node.variant,
-    if Ancestor0 /= nil ->
-	    {ok,Y_or_n} = is_right_unlinked(Amem),
-	    if Y_or_n ->
-		    {ok,Ancestor1} = find_ancestor(Ancestor0),
-		    if Ancestor1 == nil ->
-			    Return = Ancestor0;
-		       true ->
-			    Return = Ancestor1
-		    end;
-	       true ->
-		    Return = Ancestor0
-	    end;
-       true ->
-	    Return = Ancestor0
-    end,
-    {reply,{ok,Return},State}.
+    end.
 
 handle_info(type,State) ->
     io:format("type of ~p: ~p~n",[self(),type_of(State)]),
@@ -738,6 +734,33 @@ type_of(State) when is_record(State,rete_node) ->
     type_of(Variant);
 type_of(Variant) when is_record(Variant,beta_memory) -> b;
 type_of(Variant) when is_record(Variant,join) -> j. 
+
+find_ancestor(State) ->	
+    Type = type_of(State) ,
+    case Type of
+	j->
+	    #join{amem = Amem,nearest_ancestor_with_same_amem = Ancestor0}
+		= State#rete_node.variant,
+	    if Ancestor0 /= nil ->
+		    {ok,Y_or_n} = is_right_unlinked(Amem),
+		    if Y_or_n ->
+			    {ok,Ancestor1} = find_ancestor(Ancestor0),
+			    if Ancestor1 == nil ->
+				    Return = Ancestor0;
+		       true ->
+				    Return = Ancestor1
+			    end;
+		       true ->
+			    Return = Ancestor0
+		    end;
+	       true ->
+		    Return = Ancestor0
+	    end;
+	true ->
+	    Return = nil,
+	    ok
+    end,
+    {ok,Return}.
 
 insert_after(Node,P,Ls)->
     case P of
@@ -907,75 +930,14 @@ delete_token(Tr) ->
 	    Wme = runes_kb:get_wme(Wr),
 	    Trs = Wme#wme.token_refs,
 	    Wme1 = Wme#wme{token_refs = lists:delete(Tr,Trs)},
-	    runes_kb:insert(wm,Wr,Wme1)
+	    runes_kb:insert(wm,Wr,Wme1);
+       true -> ok
     end,
     Pt0 = runes_kb:get_token(Pr),
     Pchn = lists:delete(Tr,Pt0#token.children),
     Pt1 = Pt0#token{children = Pchn},
     runes_kb:insert(token,Pr,Pt1),    
-    runes_kb:delete(token,Tr).
-    
-
-  	%Ancestor = State#rete_node.variant#join.nearest_ancestor_with_same_amem,
-						%if Ancestor /= nil ->
-						%Amem0 = Ancestor0#rete_node.variant#join.amem,
-						% {ok,Is_in} = is_right_unlinked(Ancestor),
-						% if Is_in ->
-						%	    find_ancestor(Ancestor);
-						%      true  ->
-						%	    {reply,{ok,Ancestor},State}
-						%   end;
-						% true ->
-						% {reply,{ok,Ancestor},State}
-						%end;
-    %Ancestor = State#rete_node.variant#join.nearest_ancestor_with_same_amem,
-    
-			  
-
-    
-%handle_call({rmwme,Wme_ref},From,State0) ->
-    %%State0=alpha_memory
-%    Wme_refs0 = State0#alpha_memory.wme_refs,
-%    Wme_refs1 = lists:delete(Wme_ref,Wme_refs0),
-%    State1 = State0#alpha_memory{wme_refs = Wme_refs},
-%    if Wme_refs1 == [] ->
-%	    {reply,{ok,empty},State1};
-%       true ->
-%	    {reply,{ok,nonempty},State1}
-%    end.
-	
-    
-    
-    
- 
-	
-
-
-%init([alpha_memory, Paras]) ->
-%    {alpha_memroy, {wme_refs, Wme_refs}, {succs, Succ}, {rc, Rc}} = Paras,
-%    {ok,
-%     #alpha_memory{%type = alpha_memory,
-%		   wmes = Wme_refs,        %list
-%		   succs Succ,   
-%		   ref_count = Rc}};
-%init([beta_memory, Paras]) ->
-%    {beta_memory, {type = beta_memory,
-%%%%........
-
-%init([constant_test_node, Paras]) ->
-%    {constant_test_node, {field, Fi}, {value, Va}, {out_put_mem, Om}, {children, Chn}}
-%	= Paras,
-%   {ok,
-%     #constant_test_node{%type = constant_test,
-%			 field =  Fi,
-%			 value = Va,
-%			 out_put_mem = Om,  %list
-%			 children = Chn}};  %list
-%init([join_node,Paras]) ->
-%    {join, {type, Type}, {children, Children}, {parent, Parent},
-%     {amen, Amen}, {tests, Tests}, {nearest_ancestor_with_same_amem, Nawsa}} = Paras,
-%%%............    	    
-    
+    runes_kb:delete(token,Tr).    
 
 
 
