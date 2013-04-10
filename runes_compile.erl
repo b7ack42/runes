@@ -12,7 +12,7 @@ build_root_node_only_once() ->
     Root.
 
 build_dummy_top_node_only_once() ->
-    Paras = #rete_node{type=dtn,parent=nil,children = [],variant=nil},
+    Paras = #rete_node{type=dtn,parent=nil,children = [],variant=dummy_top_node},
     {ok,Dn} = runes_engine:create(dummy_top_node,Paras),
     Dn.
 
@@ -33,6 +33,7 @@ build_or_share_constant_test_node(Parent,Fi,Va) ->
 						children = []},
 		    {ok,New} = runes_engine:create(constant_test_node,Paras),
 		    runes_engine:c_linkto_pc(New,Parent),
+		    runes_agenda:inc_node_num(ctn),
 		    New
 	    end;
        true ->
@@ -62,6 +63,7 @@ build_or_share_alpha_memory(Cond)->
 					  runes_engine:alpha_memory_activation(Am,Wr)
 				  end
 			  end,Wrs),
+	    runes_agenda:inc_node_num(am),
 	    Am		
     end.   
 
@@ -88,6 +90,7 @@ build_or_share_beta_memory_node(dummy_top_node) ->
 			       variant = Bm},
 	    {ok,Bnew} = runes_engine:create(beta_memory,Paras),
 	    runes_engine:b_linkto_p(Bnew,Dn),
+	    runes_agenda:inc_node_num(bm),
 	    {Bnew,b}
     end;
 build_or_share_beta_memory_node({Parent,Type}) ->
@@ -103,6 +106,7 @@ build_or_share_beta_memory_node({Parent,Type}) ->
 	    {ok,Bnew} = runes_engine:create(beta_memory,Paras),
 	    runes_engine:b_linkto_p(Bnew,Parent),
 	    update_new_node_with_matches_from_above({Bnew,b}),
+	    runes_agenda:inc_node_num(bm),
 	    {Bnew,b}
     end.
 
@@ -119,6 +123,7 @@ build_or_share_p_node({Pa,Type},Rule) ->
 	    {ok,Pn} = runes_engine:create(p_node,Paras),
 	    runes_engine:pn_linkto_p(Pn,Pa),
 	    runes_agenda:put_pn(Na,Pn),
+	    runes_agenda:inc_node_num(pn),
 	    {Pn,p}
     end.
 	    
@@ -223,10 +228,11 @@ build_or_share_join_node({Parent,Type},Am,Tests) ->
 	    if Bm_nil ->
 		    Am_nil = false;
 	       true ->
-		    Am_nil = runes_engine:is_mem_nil(Am)
+		    {ok,Am_nil} = runes_engine:is_mem_nil(Am)
 	    end,
 	    runes_engine:j_linkto_p(New,Parent,Am_nil),
 	    runes_engine:j_linkto_a(New,Am,Bm_nil),
+	    runes_agenda:inc_node_num(jn),
 	    {New,j}
     end.
 	

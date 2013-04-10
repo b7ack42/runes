@@ -13,6 +13,10 @@
 	 get_pn/1,
 	 delete_rn/1,
 	 get_root/0,
+	 get_node_num/1,
+	 inc_node_num/1,
+	 dec_node_num/1,
+	 show_working_memory/0,
 	 fire_able/2]).
 
 -compile(export_all).
@@ -39,6 +43,11 @@ init([]) ->
     Dummy_top_node = runes_compile:build_dummy_top_node_only_once(),
     ets:insert(agenda,{dummy_top_node,Dummy_top_node}),
     ets:insert(agenda,{root_node,Root}),
+    ets:insert(agenda,{bm_num,0}),
+    ets:insert(agenda,{am_num,0}),
+    ets:insert(agenda,{ctn_num,0}),
+    ets:insert(agenda,{pn_num,0}),
+    ets:insert(agenda,{jn_num,0}),
     {ok,#agenda{conflict_set=[]}}.
 
 handle_cast({fa,Pn},State) ->
@@ -90,4 +99,138 @@ get_pn(Rn) ->
 delete_rn(Rn) ->
     ets:delete(agenda,Rn).
 
+show_working_memory() ->
+    io:format("All wme_refs: ~p~n",[runes_kb:get_all_wme_refs()]),
+    Trs = lists:flatten(ets:match(token_store,{'$1','_'})),
+    io:format("All token_refs: ~p~n",[Trs]).
+
+get_node_num(all_nodes) ->
+    Ls = lists:map(fun(Class) ->
+			   get_node_num(Class)
+		   end,[ctn,am,bm,jn,pn]),
+    Total_num = lists:foldl(fun({_,E},Acc) ->
+				    E + Acc
+			    end,0,Ls),
+    io:format("Numbers of all kinks of nodes: ~p~nThe total number: ~p~n"
+	      , [Ls,Total_num]);
+get_node_num(Class) ->
+    case Class of
+	ctn ->
+	    get_ctn_num();
+	am ->
+	    get_am_num();
+	bm ->
+	    get_bm_num();
+	jn ->
+	    get_jn_num();
+	pn ->
+	    get_pn_num()
+    end.
+
+get_am_num()->
+    case ets:lookup(agenda,am_num) of
+	[{am_num,An}]->
+	    {a,An};
+	[] ->
+	    no
+    end.
+
+get_bm_num() ->
+    case ets:lookup(agenda,bm_num) of
+	[{bm_num,Bn}] ->
+	    {b,Bn};
+	[] ->
+	    no
+    end.
+
+get_ctn_num()->
+    case ets:lookup(agenda,ctn_num) of
+	[{ctn_num,Cn}] ->
+	    {c,Cn};
+	[] ->
+	    no
+    end.
+
+get_jn_num() ->
+    case ets:lookup(agenda,jn_num) of
+	[{jn_num,Jn}] ->
+	    {j,Jn};
+	[] ->
+	    no
+    end.
+
+get_pn_num() ->
+    case ets:lookup(agenda,pn_num) of
+	[{pn_num,Pn}] ->
+	    {p,Pn};
+	[] ->
+	    no
+    end.
+
+inc_node_num(Class) ->
+    case Class of
+	ctn ->
+	    inc_ctn_num();
+	am ->
+	    inc_am_num();
+	bm ->
+	    inc_bm_num();
+	jn ->
+	    inc_jn_num();
+	pn ->
+	    inc_pn_num()
+    end.
+
+inc_ctn_num() ->
+    {c,Cn} = get_ctn_num(),
+    ets:insert(agenda,{ctn_num,Cn+1}).
+
+inc_am_num() ->
+    {a,An} = get_am_num(),
+    ets:insert(agenda,{am_num,An+1}).
+
+inc_bm_num() ->
+    {b,Bn} = get_bm_num(),
+    ets:insert(agenda,{bm_num,Bn+1}).
+
+inc_jn_num() ->
+    {j,Jn} = get_jn_num(),
+    ets:insert(agenda,{jn_num,Jn+1}).
+
+inc_pn_num() ->
+    {p,Pn} = get_pn_num(),
+    ets:insert(agenda,{pn_num,Pn+1}).
+
+dec_node_num(Class) ->
+    case Class of 
+	c ->
+	    dec_ctn_num();
+	a ->
+	    dec_am_num();
+	b ->
+	    dec_bm_num();
+	j ->
+	    dec_jn_num();
+	p ->
+	    dec_pn_num()
+    end.
+dec_ctn_num() ->
+    {c,Cn} = get_ctn_num(),
+    ets:insert(agenda,{ctn_num,Cn-1}).
+
+dec_am_num() ->
+    {a,An} = get_am_num(),
+    ets:insert(agenda,{am_num,An-1}).
+
+dec_bm_num() ->
+    {b,Bn} = get_bm_num(),
+    ets:insert(agenda,{bm_num,Bn-1}).
+
+dec_jn_num() ->
+    {j,Jn} = get_jn_num(),
+    ets:insert(agenda,{jn_num,Jn-1}).
+
+dec_pn_num() ->
+    {p,Pn} = get_pn_num(),
+    ets:insert(agenda,{pn_num,Pn-1}).
     

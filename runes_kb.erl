@@ -37,7 +37,11 @@ make_token(Node,Tr,Wr) ->
 		    node = Node,
 		    children = []},
     Ref = make_token_ref(Token),
-    if Tr/= nil ->
+    Wme0 = get_wme(Wr),
+    Wme_trs0 = Wme0#wme.token_refs,
+    Wme1 = Wme0#wme{token_refs = [Ref|Wme_trs0]},
+    ets:insert(wm_store,{Wr,Wme1}),    
+    if Tr /= nil ->
 	    Parent = get_token(Tr),
 	    PChildren = Parent#token.children,
 	    Parent1 = Parent#token{children = [Ref|PChildren]},

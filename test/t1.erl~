@@ -1,0 +1,73 @@
+-module(t1).
+
+-export([start/0,init/0]).
+
+-compile(export_all).
+
+-record(rule, {name, lhs, rhs}).
+
+%-record(lhs, {name,conds}).
+
+-record (fields, {id,
+		  attr,
+		  value}).
+
+-record (wme, {fields,
+	       alpha_mems,    %list
+	       token_refs}).
+
+-record (token, {parent,
+		 wme_ref,    %list
+		 node,
+		 children,
+		 join_results,
+		 owner}).
+
+init() ->
+    application:start(runes),
+    appmon:start().
+
+stop() ->
+    application:stop(runes),
+    appmon:stop().
+
+startrb(N) ->
+    
+    C1 =#fields{id={con,1},attr={con,class},value={con,car}},
+    C2 =#fields{id={con,1},attr={con,color},value={con,red}},
+    C3 =#fields{id={con,2},attr={con,color},value={con,yellow}},
+    C4 =#fields{id={con,2},attr={con,class},value={con,tank}},
+    C5 =#fields{id={con,3},attr={var,x},value={con,car}},
+    C6 =#fields{id={con,3},attr={var,x},value={con,red}},
+    C7 =#fields{id={con,3},attr={con,color},value={var,x}},
+    C8=#fields{id={con,4},attr={con,class},value={con,tank}},
+    Conds1 = [C1],
+    Conds2 = [C3,C4],
+    Conds3 = [C5,C6,C7],
+    Rule1= #rule{name=1,lhs=Conds1,rhs={ok}},
+    Rule2 = #rule{name=2,lhs=Conds2,rhs={ok}},
+    Rule3= #rule{name=3,lhs=Conds3,rhs={ok}},
+    runes:add_rule(Rule3).
+
+add_fact1() ->
+    F1 = #fields{id={con,3},attr={con,color},value={con,red}},
+    F2 = #fields{id={con,3},attr={con,color},value={con,car}},
+    W1 = #wme{fields=F1,alpha_mems=[],token_refs=[]},
+    W2 = #wme{fields=F2,alpha_mems=[],token_refs=[]},
+    runes:add_fact(W1),
+    runes:add_fact(W2).
+
+add_fact2() ->
+    F1 = #fields{id={con,3},attr={con,test},value={con,car}},
+    F2 = #fields{id={con,3},attr={con,test},value={con,red}},
+    F3 =#fields{id={con,3},attr={con,color},value={con,test}},
+    W1 = #wme{fields=F1,alpha_mems=[],token_refs=[]},
+    W2 = #wme{fields=F2,alpha_mems=[],token_refs=[]},
+    W3 = #wme{fields=F3,alpha_mems=[],token_refs=[]},
+    runes:add_fact(W1),
+    runes:add_fact(W2),
+    runes:add_fact(W3),
+ 
+create_rule(Nth) ->   
+    random:seed(erlang:now()),
+    Rn = random:uniform(
