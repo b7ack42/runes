@@ -5,6 +5,8 @@
 	 make_token/3,
 	 insert/3,
 	 delete/2,
+	 get_am/1,
+	 get_bm/1,
 	 get_wme/1,
 	 get_f/2,
 	 get_token/1,
@@ -18,7 +20,9 @@
 
 init() ->
     ets:new(wm_store, [public, named_table, {read_concurrency, true}]),
-    ets:new(token_store, [public, named_table,{read_concurrency, true}]),  
+    ets:new(token_store, [public, named_table,{read_concurrency, true}]),
+   % ets:new(bm,[public,named_table,{read_concurrency,true}]),     
+   % ets:new(am,[public,named_table,{read_concurrency,true}]),
     ok.
 
 make_wm_ref(Wme) ->
@@ -51,17 +55,37 @@ make_token(Node,Tr,Wr) ->
     end,
     Ref.
     
-
+insert(am,Am,Mem) ->
+    ets:insert(am,{Am,Mem});
+insert(bm,Bm,Mem) ->
+    ets:insert(bm,{Bm,Mem});
 insert(wm, Ref, Wme) ->
     ets:insert(wm_store,{Ref, Wme});
 insert(token, Ref, Token) ->
     ets:insert(token_store, {Ref, Token}).
 
+delete(am,Am) ->
+    ets:delete(am,Am);
+delete(bm,Bm) ->
+    ets:delete(bm,Bm);
 delete(wm,Wme_ref) ->
     ets:delete(wm_store,Wme_ref);
 delete(token,Tr) ->
     ets:delete(token_store,Tr).
 
+get_am(Am) ->
+    case ets:lookup(am,Am) of
+	[{Am,Mem}] ->
+	    Mem;
+	[] -> []
+    end.
+get_bm(Bm) ->
+    case ets:lookup(bm,Bm) of
+	[{Bm,Mem}] ->
+	    Mem;
+	[] ->
+	    []
+    end.
 get_wme(Ref) ->
     case ets:lookup(wm_store,Ref) of
 	[{Ref,Wme}] ->

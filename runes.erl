@@ -19,7 +19,8 @@ remove_rule(Rule) ->
     runes_compile:remove_production(Rule).
 
 add_fact(Fact) ->
-    runes_engine:add_wme(Fact).
+    Wme = #wme{fields=Fact,alpha_mems=[],token_refs=[]},
+    runes_engine:add_wme(Wme).
 
 info() ->
     runes_agenda:show_working_memory(),

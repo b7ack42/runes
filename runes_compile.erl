@@ -20,14 +20,14 @@ build_or_share_constant_test_node(root_node,Fi,Va) ->
     {ok,Root} = runes_agenda:get_root(),
     build_or_share_constant_test_node(Root,Fi,Va);
 build_or_share_constant_test_node(Parent,Fi,Va) ->
-    {Tag,_} = Va,
+    {Tag,Val} = Va,
     if Tag == con ->
-	    {ok,Re} = runes_engine:quarry_child_as(Parent,{c,Fi,Va}),
+	    {ok,Re} = runes_engine:quarry_child_as(Parent,{c,Fi,Val}),
 	    if Re /= nil ->
 		    Re;
 	       true ->
 		    Paras = #constant_test_node{field = Fi,
-						value = Va,
+						value = Val,
 						out_put_mem = nil,
 						parent = Parent,
 						children = []},
@@ -64,6 +64,8 @@ build_or_share_alpha_memory(Cond)->
 				  end
 			  end,Wrs),
 	    runes_agenda:inc_node_num(am),
+	    ets:new(list_to_atom(pid_to_list(Am)),
+		    [public,named_table,{read_concurrency,true}]), 
 	    Am		
     end.   
 
@@ -89,6 +91,10 @@ build_or_share_beta_memory_node(dummy_top_node) ->
 			       parent={Dn,d},
 			       variant = Bm},
 	    {ok,Bnew} = runes_engine:create(beta_memory,Paras),
+	    Name = list_to_atom(pid_to_list(Bnew)),
+	    ets:new(Name,[public,named_table,{read_concurrency,true}]),
+	    runes_engine:set_bm(Bnew,[nil]),
+	    ets:insert(list_to_atom(pid_to_list(Bnew)),{bm,[nil]}),
 	    runes_engine:b_linkto_p(Bnew,Dn),
 	    runes_agenda:inc_node_num(bm),
 	    {Bnew,b}
@@ -104,6 +110,8 @@ build_or_share_beta_memory_node({Parent,Type}) ->
 			       parent={Parent,Type},
 			       variant = Bm},
 	    {ok,Bnew} = runes_engine:create(beta_memory,Paras),
+	    Name = list_to_atom(pid_to_list(Bnew)),
+	    ets:new(Name,[public,named_table,{read_concurrency,true}]),
 	    runes_engine:b_linkto_p(Bnew,Parent),
 	    update_new_node_with_matches_from_above({Bnew,b}),
 	    runes_agenda:inc_node_num(bm),
@@ -146,9 +154,9 @@ find_variables_in_cond(Cond) ->
 
 get_join_tests_from_condition(Cond,EConds) ->
     VarL = find_variables_in_cond(Cond),
-    EVarLs = lists:reverse(lists:map(fun(C)->
-					     find_variables_in_cond(C)
-				     end,EConds)),
+    EVarLs = lists:map(fun(C)->
+			       find_variables_in_cond(C)
+		       end,EConds),
     Tests = lists:filter(fun(T) ->
 				 T /= nil
 			 end,lists:map(fun(VF) ->
@@ -224,11 +232,11 @@ build_or_share_join_node({Parent,Type},Am,Tests) ->
 			       parent = {Parent,Type},
 			       variant = Jn},
 	    {ok,New} = runes_engine:create(join,Paras),
-	    {ok,Bm_nil} = runes_engine:is_mem_nil(Parent),
+	    Bm_nil = runes_engine:is_bm_nil(Parent),
 	    if Bm_nil ->
 		    Am_nil = false;
 	       true ->
-		    {ok,Am_nil} = runes_engine:is_mem_nil(Am)
+		    Am_nil = runes_engine:is_am_nil(Am)
 	    end,
 	    runes_engine:j_linkto_p(New,Parent,Am_nil),
 	    runes_engine:j_linkto_a(New,Am,Bm_nil),

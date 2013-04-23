@@ -39,6 +39,8 @@ get_conflict_set() ->
 
 init([]) ->
     ets:new(agenda, [public,named_table,{read_concurrency,true}]),
+%    ets:new(am,[public,named_table,{read_concurrency,true}]),
+%    ets:new(bm,[public,named_table,{read_concurrency,true}]),
     Root = runes_compile:build_root_node_only_once(),
     Dummy_top_node = runes_compile:build_dummy_top_node_only_once(),
     ets:insert(agenda,{dummy_top_node,Dummy_top_node}),
