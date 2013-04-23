@@ -20,14 +20,14 @@ build_or_share_constant_test_node(root_node,Fi,Va) ->
     {ok,Root} = runes_agenda:get_root(),
     build_or_share_constant_test_node(Root,Fi,Va);
 build_or_share_constant_test_node(Parent,Fi,Va) ->
-    {Tag,_} = Va,
+    {Tag,Val} = Va,
     if Tag == con ->
-	    {ok,Re} = runes_engine:quarry_child_as(Parent,{c,Fi,Va}),
+	    {ok,Re} = runes_engine:quarry_child_as(Parent,{c,Fi,Val}),
 	    if Re /= nil ->
 		    Re;
 	       true ->
 		    Paras = #constant_test_node{field = Fi,
-						value = Va,
+						value = Val,
 						out_put_mem = nil,
 						parent = Parent,
 						children = []},
@@ -146,9 +146,9 @@ find_variables_in_cond(Cond) ->
 
 get_join_tests_from_condition(Cond,EConds) ->
     VarL = find_variables_in_cond(Cond),
-    EVarLs = lists:reverse(lists:map(fun(C)->
-					     find_variables_in_cond(C)
-				     end,EConds)),
+    EVarLs = lists:map(fun(C)->
+			       find_variables_in_cond(C)
+		       end,EConds),
     Tests = lists:filter(fun(T) ->
 				 T /= nil
 			 end,lists:map(fun(VF) ->

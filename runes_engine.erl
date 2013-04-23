@@ -7,7 +7,7 @@
 	 add_wme/1,
 	 remove_wme/1,
 	 quarry_keys/2,
-	 left_activation/4,
+	 left_activation/3,
 	 right_activation/3,
 	 fake_right_activation/2,
 	 root_activation/1,
@@ -75,26 +75,29 @@ constant_test_node_activation(CNode,Wme_ref) ->
 alpha_memory_activation(Node, Wme_ref) ->
     gen_server:cast(Node, {aa,Wme_ref}).
 
-beta_memory_left_activation(Bnode,Token_ref,Wme_ref) ->
-    gen_server:cast(Bnode,{bla,Token_ref,Wme_ref}).
+beta_memory_left_activation(Bnode,TWP) ->
+    gen_server:cast(Bnode,{bla,TWP}).
 
-join_node_left_activation(Jnode,Token_ref,Flag) ->
-    gen_server:cast(Jnode,{jla,Token_ref,Flag}).
+join_node_left_activation(Jnode,Trs,Flag) ->
+    gen_server:cast(Jnode,{jla,Trs,Flag}).
 
 join_node_right_activation(Jnode,Wr,Flag) ->
     gen_server:cast(Jnode,{jra,Wr,Flag}).
 
-p_node_activation(Pnode,Tr,Wr) ->
-    gen_server:cast(Pnode,{pa,Tr,Wr}).
+p_node_activation(Pnode,TWP) ->
+    gen_server:cast(Pnode,{pa,TWP}).
 
-left_activation({Node,Type},Tr,Wr,Tag) ->
+left_activation({Node,Type},TWP,Tag) ->
     case Type of
 	j ->
-	    join_node_left_activation(Node,Tr,Tag);
+	    {Trs,_} = TWP,
+	    join_node_left_activation(Node,Trs,Tag);
 	b -> 
-	    beta_memory_left_activation(Node,Tr,Wr);
+	    %beta_memory_left_activation(Node,Tr,Wr);
+	    beta_memory_left_activation(Node,TWP);
 	p ->
-	    p_node_activation(Node,Tr,Wr);
+	   % p_node_activation(Node,Tr,Wr);
+	    p_node_activation(Node,TWP);
 	_ -> 
 	    %LOG("no such node as ~p : ~p",[Type,self()])
 	    io:format("no such node as ~p:~p",[Type,self()])
@@ -171,8 +174,17 @@ remove(wme,Wme_ref,Amem) ->
 remove(token,Token_ref,Node) ->
     gen_server:cast(Node,{rt,Token_ref}).
 
-quarry_mem(Node) ->
-    gen_server:call(Node,qm).
+quarry_mem(Node,_Tag) ->
+    try
+	gen_server:call(Node,qm,50000)
+    catch
+	exit:Reason ->
+	    io:format("@@@exit: ~p@@@~n",[Reason]),
+	    {ok,[nil]};
+	Other ->
+	    io:format("@@@other: ~p@@@~n",[Other])
+    end.
+
 quarry_keys(Node,Keys) ->
     gen_server:call(Node,{qks,Keys}).
 quarry_child_as(Node,As) ->
@@ -268,60 +280,64 @@ handle_cast({ca,Wme_ref}, State) ->
     end,
     {noreply,State};
 
-handle_cast({pa,Tr,Wr},State0) ->
-    New_tr = runes_kb:make_token(self(),Tr,Wr),
+handle_cast({pa,TWP},State0) ->
+     Ntrs = lists:flatten(lists:map(fun({Trs,Wr}) ->
+					   lists:map(fun(Tr) ->
+							     runes_kb:make_token(self(),Tr,Wr)
+						     end,Trs)
+				   end,TWP)),    
     Trs0 = State0#p_node.token_refs,
-    Trs1 = [New_tr|Trs0],
+    Trs1 = Ntrs ++ Trs0,
     State1 = State0#p_node{token_refs = Trs1},
     runes_agenda:fire_able(self(),State0),
     {noreply,State1};
 
-handle_cast({bla,Token_ref,Wme_ref},State) ->
-    New_token_ref = runes_kb:make_token(self(),Token_ref,Wme_ref),
+handle_cast({bla,TWP},State) ->
+    Ntrs = lists:flatten(lists:map(fun({Trs,Wr}) ->
+					   lists:map(fun(Tr) ->
+							     runes_kb:make_token(self(),Tr,Wr)
+						     end,Trs)
+				   end,TWP)),    
     Beta_m = State#rete_node.variant,
     Token_refs = Beta_m#beta_memory.token_refs,
+    Trs1 = Ntrs++Token_refs,
     if Token_refs == [] ->  Flag = true;
        true          ->  Flag = false
     end,
-    Beta_m1 = Beta_m#beta_memory{token_refs = [New_token_ref|Token_refs]},
     Children = State#rete_node.children,
-    lists:foreach(fun(Pair)-> left_activation(Pair,New_token_ref,nil,Flag)
+    lists:foreach(fun(Pair)-> left_activation(Pair,{Ntrs,nil},Flag)
 		  end,Children),
-    State1 = State#rete_node{variant=Beta_m1},
+    Beta_m1 = Beta_m#beta_memory{token_refs = Trs1},
+    State1=State#rete_node{variant=Beta_m1},
     {noreply,State1};
 
-handle_cast({jla,Tr,Flag},State) ->
+handle_cast({jla,Trs,Flag},State) ->
     Join_part = State#rete_node.variant,
     Amem = Join_part#join.amem,   
     {Bm,b} = State#rete_node.parent,   %%%%%%type
     Tests = Join_part#join.tests,
+    {ok,Mem} = quarry_mem(Amem,jla),
     if Flag ->
-	    {ok,Isnil} = is_mem_nil(Amem),
-	    Ancesotr = find_ancestor(State),
+	    {ok,Ancesotr} = find_ancestor(State),
 	    relink_to_alpha_memory({self(),j},Amem,Ancesotr),
-	    %{ok, Isnil} = is_mem_nil(Amem),
-	    if Isnil -> 
+	    if Mem == [] ->
 		    dislink_to(self(),Bm) ; %%% dislink
 	       true ->
 		    ok
 	    end;
        true ->
-	    Isnil = false
+	    ok
     end,
-    if not(Isnil) ->
-	    {ok, Mem} = quarry_mem(Amem),
-	    lists:foreach(fun(Wr) ->
-				  Pass_or_no = perform_join_tests(Tests,Tr,Wr),
-				  if Pass_or_no ->
-					  Children = State#rete_node.children,
-					  lists:foreach(fun(Pair) ->
-								left_activation(Pair,Tr,Wr,off)
-							end,Children);
-				     true -> ok
-				  end
-			  end,Mem);
-       true -> ok
-    end,
+    Children = State#rete_node.children,
+    TWP =  lists:foldl(fun(Wr,Acc) ->
+			       Ntrs = lists:filter(fun(Tr) ->
+							   perform_join_tests(Tests,Tr,Wr)
+						   end,Trs),
+			       [{Ntrs,Wr}|Acc]
+		       end,[],Mem),
+    lists:foreach(fun(Pair) ->
+			  left_activation(Pair,TWP,off)
+		  end,Children),
     {noreply,State};
 
 handle_cast({jra,Wr,Flag},State) ->
@@ -329,50 +345,42 @@ handle_cast({jra,Wr,Flag},State) ->
     Amem = Join_part#join.amem,   
     {Bm,b} = State#rete_node.parent,    %should be beta_memory type
     Tests = Join_part#join.tests,
+    {ok,Mem} = quarry_mem(Bm,jra),
     if Flag ->
+	    %{ok,Isnil} = is_mem_nil(Bm),
 	    relink_to_beta_memory(self(),Bm),
-	    {ok,Isnil} = is_mem_nil(Bm),
-	    if Isnil -> 
+	    if Bm == [] -> 
 		    dislink_to(self(),Amem);   %%%dislink
 	       true -> ok			
 	    end;
        true ->
-	    Isnil = false
+	    %Isnil = false
+	    ok
     end,
-    if not(Isnil) ->
-	    {ok, Mem} = quarry_mem(Bm),
-	    lists:foreach(fun(Tr) ->
-				  Pass_or_no = perform_join_tests(Tests,Tr,Wr),
-				  if Pass_or_no ->
-					Children = State#rete_node.children,
-				        lists:foreach(fun(Pair) ->
-							      left_activation(Pair,Tr,Wr,off)	
-						      end,Children);
-				     true -> ok
-				  end
-			  end,Mem);
-       true -> ok
-    end,
+    Trs =  lists:filter(fun(Tr) ->
+				perform_join_tests(Tests,Tr,Wr)
+			end,Mem),
+    Children = State#rete_node.children,
+    lists:foreach(fun(Pair) ->
+			  left_activation(Pair,[{Trs,Wr}],off)
+		  end,Children),
     {noreply,State};
 
 handle_cast({fra,New},State) ->
     Am = State#rete_node.variant#join.amem,
     {Bm,b} = State#rete_node.parent,
     Tests = State#rete_node.variant#join.tests,
-    {ok,Wrs} = quarry_mem(Am),
-    {ok,Trs} = quarry_mem(Bm),
-    lists:foreach(fun(Wr) ->
-			  lists:foreach(fun(Tr) ->
-						Pass_or_no = perform_join_tests(Tests,Tr,Wr),
-						if Pass_or_no ->
-							left_activation(New,Tr,Wr,off);
-						   true -> ok
-						end
-					end,Trs)
-		  end,Wrs),
+    {ok,Wrs} = quarry_mem(Am,fra),
+    {ok,Trs} = quarry_mem(Bm,fra),
+    TWP =  lists:foldl(fun(Wr,Acc) ->
+			       Ntrs = lists:filter(fun(Tr) ->
+							   perform_join_tests(Tests,Tr,Wr)
+						   end,Trs),
+			       [{Ntrs,Wr}|Acc]
+		       end,[],Wrs),
+    left_activation(New,TWP,off),
     {noreply,State};
 
-	
 handle_cast({dl,Node},State0) ->   %join_node dislink from bm or am
     Type = type_of(State0),
     case Type of
@@ -464,7 +472,7 @@ handle_cast({j2p,Join,Tag},State) ->
     Achn = [{Join,j}|State#rete_node.variant#beta_memory.all_children],
     Bm=State#rete_node.variant#beta_memory{all_children = Achn},
     % io:format("Pid: ~p, Tag: ~p",[self(),Tag]),
-    if Tag -> 
+     if Tag -> 
 	    Chn = State#rete_node.children;
        true ->
 	    Chn = [{Join,j}|State#rete_node.children]
@@ -475,7 +483,7 @@ handle_cast({j2a,Join,Tag},State) ->
     Ref_c = State#alpha_memory.ref_count+1,
     if Tag ->
 	    {noreply,State#alpha_memory{ref_count=Ref_c}};
-       true ->
+      true ->
 	    Succs = [{Join,j}|State#alpha_memory.succs],
 	    {noreply,State#alpha_memory{ref_count=Ref_c,succs = Succs}}
     end;
@@ -725,6 +733,38 @@ handle_call({ul,Type},{From,_},State0) ->   %Node = {NPid,Type}
 	    {reply,{ok,false},State0}
     end.
 
+handle_info(timeout,State) ->
+    ok,
+    {noreply,State};
+
+handle_info(mem,State) ->
+    Type = type_of(State),
+    case Type of 
+	a ->
+	    io:format("Am of ~p: ~p~n",[self(),State#alpha_memory.wme_refs]);
+	b ->
+	    io:format("Bm of ~p: ~p~n",
+		      [self(),State#rete_node.variant#beta_memory.token_refs]);
+	_ ->
+	    ok
+    end,
+    {noreply,State};
+
+handle_info(test,State) ->
+    case type_of(State) of
+	c ->
+	    io:format("~p's field and vlaue: ~p ~p~n",
+		      [self(),
+		       State#constant_test_node.field,
+		       State#constant_test_node.value]);
+	j ->
+	    io:format("~p' join tests of: ~p~n",
+		      [self(),State#rete_node.variant#join.tests]);
+	_ ->
+	    ok
+    end,
+    {noreply,State};
+	    
 handle_info(type,State) ->
     io:format("type of ~p: ~p~n",[self(),type_of(State)]),
     {noreply,State};
@@ -766,7 +806,7 @@ type_of(#beta_memory{}) -> b;
 type_of(#join{})  -> j. 
 
 find_ancestor(State) ->	
-    Type = type_of(State) ,
+    Type = type_of(State),
     case Type of
 	j->
 	    #join{amem = Amem,nearest_ancestor_with_same_amem = Ancestor0}
@@ -777,7 +817,7 @@ find_ancestor(State) ->
 			    {ok,Ancestor1} = find_ancestor(Ancestor0),
 			    if Ancestor1 == nil ->
 				    Return = Ancestor0;
-		       true ->
+			       true ->
 				    Return = Ancestor1
 			    end;
 		       true ->
@@ -786,7 +826,7 @@ find_ancestor(State) ->
 	       true ->
 		    Return = Ancestor0
 	    end;
-	true ->
+	_Other ->
 	    Return = nil,
 	    ok
     end,
