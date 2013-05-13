@@ -21,8 +21,8 @@
 init() ->
     ets:new(wm_store, [public, named_table, {read_concurrency, true}]),
     ets:new(token_store, [public, named_table,{read_concurrency, true}]),
-   % ets:new(bm,[public,named_table,{read_concurrency,true}]),     
-   % ets:new(am,[public,named_table,{read_concurrency,true}]),
+    ets:new(bm,[public,named_table,{read_concurrency,true}]),     
+    ets:new(am,[public,named_table,{read_concurrency,true}]),
     ok.
 
 make_wm_ref(Wme) ->
@@ -55,10 +55,6 @@ make_token(Node,Tr,Wr) ->
     end,
     Ref.
     
-insert(am,Am,Mem) ->
-    ets:insert(am,{Am,Mem});
-insert(bm,Bm,Mem) ->
-    ets:insert(bm,{Bm,Mem});
 insert(wm, Ref, Wme) ->
     ets:insert(wm_store,{Ref, Wme});
 insert(token, Ref, Token) ->
@@ -72,6 +68,12 @@ delete(wm,Wme_ref) ->
     ets:delete(wm_store,Wme_ref);
 delete(token,Tr) ->
     ets:delete(token_store,Tr).
+
+set_am(Am,Mem) ->
+    ets:insert(am,{Am,Mem}).
+
+set_bm(Bm,Mem) ->
+    ets:insert(bm,{Bm,Mem}).
 
 get_am(Am) ->
     case ets:lookup(am,Am) of
@@ -95,17 +97,22 @@ get_wme(Ref) ->
 
 get_f(Wme, Field) ->
     Fields = Wme#wme.fields,
-    case Field of
-	id ->  Fields#fields.id;
-	attr -> Fields#fields.attr;
-	value -> Fields#fields.value
-    end.
+    proplists:get_value(Field,Fields).
+    %    case Field of
+%	id ->  Fields#fields.id;
+%	attr -> Fields#fields.attr;
+%	value -> Fields#fields.value
+%    end.
 
 get_token(Ref) ->
-    case ets:lookup(token_store,Ref) of
-	[{Ref,Token}] ->
-	    Token;
-	[] -> no_Token
+    if Ref == nil ->
+	    [];
+       true ->
+	    case ets:lookup(token_store,Ref) of
+		[{Ref,Token}] ->
+		    Token;
+		[] -> no_Token
+	    end
     end.
 
 get_nth_wr_from_token(Token_ref,0) ->

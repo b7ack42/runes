@@ -1,0 +1,172 @@
+-module(runes_match).
+
+-include("internal.hrl").
+
+-export([
+	 group_wrs/2,
+	 lperform_join_tests/3,
+	 rperform_join_tests/3,
+	 merge/2	 
+	]).
+
+-compile(export_all).
+
+
+group_wrs(Wrl,Field) ->
+    KeyWrL = lists:map(fun(Wr) ->
+			       Wme=runes_kb:get_wme(Wr),
+			       {runes_kb:get_f(Wme,Field),Wr}
+		       end,Wrl),
+    Keys = lists:reverse(proplists:get_keys(KeyWrL)),
+    Re = 
+	lists:map(fun(Key) ->
+			  {Key,proplists:get_all_values(Key,KeyWrL)}
+		  end,Keys),
+    {Keys,Re}.
+
+split_t(T,F,N) ->
+    {L1,[Wrl|L2]} = lists:split(N,T),
+    {_,Grouped_wrll} = group_wrs(Wrl,F),
+    lists:map(fun({Field,Gwl}) ->
+		      {Field,L1++[Gwl|L2]}
+	      end,Grouped_wrll).
+
+split_ts(Tl,F,N) ->
+    lists:flatmap(fun(T)->
+			  split_t(T,F,N)
+		  end,Tl).
+
+
+split_match(Test,Tl) ->
+    #test_at_join_node{field_of_arg1=F1,
+		       condition_number_of_arg2=Nth,
+		       field_of_arg2=F2} = Test,
+    lists:flatmap(fun(T) ->
+			  [Wrl|Tt] = T,
+			  {Keys,Gwrls} = group_wrs(Wrl,F1),
+			  Gtrs = split_t(Tt,F2,Nth),
+			  lists:foldr(fun(Key,Acc) ->
+					      Sgt = proplists:get_all_values(Key,Gtrs),
+					      if Sgt /= [] ->
+						      Wrl2 = proplists:get_value(Key,Gwrls),
+						      lists:map(fun(St) ->
+									[Wrl2|St]
+								 end,Sgt) ++ Acc;
+						 true -> Acc
+					      end
+				      end,[],Keys)
+		  end,Tl).
+		      
+		      
+match([],Tl) ->
+    Tl;
+match([Test|T],Tl) ->
+    TestTl = split_match(Test,Tl),
+    match(T,TestTl).
+		       
+lperform_join_tests(Tests,Tl,Wrl) ->
+    if Wrl == [] ->%orelse Tl == []->
+	    [];
+       true ->
+	    NewTl = lists:map(fun(T)->
+						%Token = runes_kb:get_token(Tr),
+				      [Wrl|T]
+			      end,Tl),
+	    match(Tests,NewTl)
+    end.
+
+rperform_join_tests(Tests,Trl,Wrl) ->
+    if Trl == []  orelse Wrl == []->
+	    [];
+       true ->
+	    NewTl = lists:map(fun(Tr) ->
+				      T = runes_kb:get_token(Tr),
+				      [Wrl|T]
+			      end,Trl),
+	    match(Tests,NewTl)
+    end.
+
+merge({NewT,_N},[]) ->
+    runes_kb:make_token_ref(NewT);
+merge({NewT,N},[Otr|Left]) ->
+    Token = runes_kb:get_token(Otr),
+    {L1,[Wrl|L2]} = lists:split(N,Token),
+    {N1,[Nw|N2]} = lists:split(N,NewT),
+    if L1==N1 andalso L2==N2 ->
+	    runes_kb:insert(token,Otr,L1++[(Nw++Wrl)|L2]),
+	    yes;
+       true ->
+	    merge({NewT,N},Left)
+    end.
+
+
+
+
+make_wme(Fact) ->
+    #wme{fields=Fact,alpha_mems=[],token_refs=[]}.
+
+make_fact(I,A,V) ->
+    #fields{id=I,attr=A,value=V}.
+
+make_jt(F1,Nth,F2) ->
+    #test_at_join_node{field_of_arg1=F1,
+		       condition_number_of_arg2=Nth,
+		       field_of_arg2=F2}. 
+
+test() ->
+    runes_kb:init(),
+    Wrl1=
+    lists:flatmap(fun(N) ->
+			  lists:flatmap(fun(X) ->
+						lists:map(fun(C) ->
+								  runes_kb:make_wm_ref(
+								    make_wme(
+								      make_fact(N,X,C)))
+							  end,[red,black])
+					end,[x,y])
+		  end,[1,2]),
+    Wrl2=
+    lists:flatmap(fun(N) ->
+			  lists:flatmap(fun(X) ->
+						lists:map(fun(C) ->
+								  runes_kb:make_wm_ref(
+								    make_wme(
+								      make_fact(N,X,C)))
+							  end,[white,black])
+					end,[u,v])
+		  end,[3,4]),
+    Wr0 = runes_kb:make_wm_ref(
+	     make_wme(
+	       make_fact(1,u,black))),
+
+    Wr1 = runes_kb:make_wm_ref(
+	     make_wme(
+	       make_fact(1,u,white))),
+    
+    Wrl0 = [Wr0,Wr0],
+
+    Test1 = make_jt(id,1,id),
+    Test2 = make_jt(attr,0,attr),
+    Test3 = make_jt(value,1,value),
+    %Tr1 = runes_kb:make_token_ref([Wrl2,Wrl1]),
+    %Tr2 = runes_kb:make_token_ref([Wrl1,Wrl2]),
+    Tr1 = [Wrl2,Wrl1],
+    Tr2 = [Wrl1,Wrl2],
+    Trl = [Tr1,Tr2],
+    Tests=[Test3],%[Test1,Test2],
+    Re = lperform_join_tests(Tests,Trl,Wrl0),
+    display(Re).
+
+display(Tl) ->
+    lists:map(fun(T)->
+		     % io:format("Token: ~n"),
+		      lists:map(fun(Wrl)->
+				%	io:format("  Wrl:~n"), 
+					lists:map(fun(Wr) ->
+							 % io:format("  ~p~n",[Wr])
+							  runes_kb:get_wme(Wr)
+						  end,Wrl)
+				end,T)
+	      end,Tl).
+					
+

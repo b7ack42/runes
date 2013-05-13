@@ -41,11 +41,11 @@ build_or_share_constant_test_node(Parent,Fi,Va) ->
     end.
 
 build_or_share_alpha_memory(Cond)->
-    %#fields{id=Id,attr=Attr,value=Val} = Cond,
-    %Ls = [{id,Id},{attr,Attr},{value,Val}],
+    #fields{id=Id,attr=Attr,value=Val} = Cond,
+    Ls = [{id,Id},{attr,Attr},{value,Val}],
     Cur_n = lists:foldl(fun({F,V},Cur)->
 				build_or_share_constant_test_node(Cur,F,V)
-			end, root_node,Cond),
+			end, root_node,Ls),
     {ok,[{o,Om}]} = runes_engine:quarry_keys(Cur_n,[o]),
     if Om /= nil ->
 	    Om;
@@ -64,11 +64,21 @@ build_or_share_alpha_memory(Cond)->
 				  end
 			  end,Wrs),
 	    runes_agenda:inc_node_num(am),
-	    %ets:new(list_to_atom(pid_to_list(Am)),
-	%	    [public,named_table,{read_concurrency,true}]), 
+	    ets:new(list_to_atom(pid_to_list(Am)),
+		    [public,named_table,{read_concurrency,true}]), 
 	    Am		
     end.   
 
+%build_or_share_beta_memory_node(dummy_top_node) ->
+%    Bm = #beta_memory{token_refs=[nil],all_children=[]},
+%    Paras = #rete_node{type = bm,
+%		       children = [],
+%		       parent = nil,
+%		       variant = Bm},
+%    {ok,Bn} = runes_engine:create(beta_memory,Paras),
+%    {Bn,b};
+%build_or_share_beta_memory_node(dummy_top_node)->
+%    dummy_top_node;
 build_or_share_beta_memory_node(dummy_top_node) ->
     {ok,Dn} = runes_agenda:get_dummy_top_node(),
     {ok,Ch} = runes_engine:quarry_child_as(Dn,b),
@@ -81,10 +91,10 @@ build_or_share_beta_memory_node(dummy_top_node) ->
 			       parent={Dn,d},
 			       variant = Bm},
 	    {ok,Bnew} = runes_engine:create(beta_memory,Paras),
-	    %Name = list_to_atom(pid_to_list(Bnew)),
-	    %ets:new(Name,[public,named_table,{read_concurrency,true}]),
+	    Name = list_to_atom(pid_to_list(Bnew)),
+	    ets:new(Name,[public,named_table,{read_concurrency,true}]),
 	    runes_engine:set_bm(Bnew,[nil]),
-	    %ets:insert(list_to_atom(pid_to_list(Bnew)),{bm,[nil]}),
+	    ets:insert(list_to_atom(pid_to_list(Bnew)),{bm,[nil]}),
 	    runes_engine:b_linkto_p(Bnew,Dn),
 	    runes_agenda:inc_node_num(bm),
 	    {Bnew,b}
@@ -100,8 +110,8 @@ build_or_share_beta_memory_node({Parent,Type}) ->
 			       parent={Parent,Type},
 			       variant = Bm},
 	    {ok,Bnew} = runes_engine:create(beta_memory,Paras),
-	    %Name = list_to_atom(pid_to_list(Bnew)),
-	    %ets:new(Name,[public,named_table,{read_concurrency,true}]),
+	    Name = list_to_atom(pid_to_list(Bnew)),
+	    ets:new(Name,[public,named_table,{read_concurrency,true}]),
 	    runes_engine:b_linkto_p(Bnew,Parent),
 	    update_new_node_with_matches_from_above({Bnew,b}),
 	    runes_agenda:inc_node_num(bm),
@@ -127,9 +137,9 @@ build_or_share_p_node({Pa,Type},Rule) ->
 	    
 find_variables_in_cond(Cond) ->
     %Cond = fields
-    %$#fields{id=Id,attr=Attr,value=Val} = Cond,
-    %$Ls = [{Id,id},{Attr,attr},{Val,value}],
-    lists:foldr(fun({F,V},A) ->
+    #fields{id=Id,attr=Attr,value=Val} = Cond,
+    Ls = [{Id,id},{Attr,attr},{Val,value}],
+    lists:foldr(fun({V,F},A) ->
 			if V /= nil ->
 				case V of
 				    {var,Var} ->
@@ -140,7 +150,7 @@ find_variables_in_cond(Cond) ->
 			   true ->
 				A
 			end
-		end,[],Cond).
+		end,[],Ls).
 
 get_join_tests_from_condition(Cond,EConds) ->
     VarL = find_variables_in_cond(Cond),
@@ -197,13 +207,23 @@ find_nearest_ancestor_with_same_amem(Nt,Am)->
 	    end
     end.
 
+%build_or_share_join_node(dummy_top_node,Am,Tests)->
+%    Jn=#join{amem=Am,
+%	     tests = Tests,
+%	     nearest_ancestor_with_same_amem = nil},
+%    Paras = #rete_node{type=join,
+%		       children=[],
+%		       parent = dummy_top_node,
+%		       variant=Jn},
+%    {ok,New} = runes_engine:create(join,Paras),
+%    runes_engine:j_linkto_a(New,Am,false),
+%    {New,j};
 build_or_share_join_node({Parent,Type},Am,Tests) ->
     {ok,Ch} = runes_engine:quarry_child_as(Parent,{j,Am,Tests}),
     if Ch /= nil ->
 	    Ch;
        true ->
-%	    Na=find_nearest_ancestor_with_same_amem({Parent,Type},Am),
-	    Na = nil,
+	    Na=find_nearest_ancestor_with_same_amem({Parent,Type},Am),
 	    Jn = #join{amem = Am,
 		       tests = Tests,
 		       nearest_ancestor_with_same_amem = Na},
@@ -212,14 +232,12 @@ build_or_share_join_node({Parent,Type},Am,Tests) ->
 			       parent = {Parent,Type},
 			       variant = Jn},
 	    {ok,New} = runes_engine:create(join,Paras),
-	    %Bm_nil = runes_engine:is_bm_nil(Parent),
-	    %if Bm_nil ->
-	%	    Am_nil = false;
-	 %      true ->
-	%	    Am_nil = runes_engine:is_am_nil(Am)
-	 %   end,
-	    Bm_nil = false,
-	    Am_nil = false,
+	    Bm_nil = runes_engine:is_bm_nil(Parent),
+	    if Bm_nil ->
+		    Am_nil = false;
+	       true ->
+		    Am_nil = runes_engine:is_am_nil(Am)
+	    end,
 	    runes_engine:j_linkto_p(New,Parent,Am_nil),
 	    runes_engine:j_linkto_a(New,Am,Bm_nil),
 	    runes_agenda:inc_node_num(jn),
@@ -266,7 +284,7 @@ update_new_node_with_matches_from_above(New) ->
 				   runes_kb:get_token(Tr)
 			   end,Trs),
 	    %$lists:foreach(fun(Tr) ->
-				  runes_engine:left_activation(New,{Tl,0},off);
+				  runes_engine:left_activation(New,{Tl,0},off)
 	    %$		  end,Trs);
 	j ->
 	    runes_engine:fake_right_activation(Parent,New);
@@ -293,18 +311,16 @@ perform_test(_,[]) -> true;
 perform_test(Wr,[{F,V}|Cs])->
     Wme = runes_kb:get_wme(Wr),
     Fields = Wme#wme.fields,
-    Va = proplists:get_value(F,Fields),
-%    Bool = 
-%	case F of
-%	    id -> 
-%		Fields#fields.id == V;
-%	    attr ->
-%		Fields#fields.attr == V;
-%	    value ->
-%		Fields#fields.value == V
-%	end,
- %   if Bool ->
-    if Va == V ->
+    Bool = 
+	case F of
+	    id -> 
+		Fields#fields.id == V;
+	    attr ->
+		Fields#fields.attr == V;
+	    value ->
+		Fields#fields.value == V
+	end,
+    if Bool ->
 	    perform_test(Wr,Cs);
        true ->
 	    false

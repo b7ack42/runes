@@ -89,12 +89,16 @@ p_node_activation(Pnode,Msg) ->
 left_activation({Node,Type},Msg,Tag) ->
     case Type of
 	j ->
+	    %${Trs,_} = TWP,
 	    join_node_left_activation(Node,Msg,Tag);
 	b -> 
+	    %beta_memory_left_activation(Node,Tr,Wr);
 	    beta_memory_left_activation(Node,Msg);
 	p ->
+	   % p_node_activation(Node,Tr,Wr);
 	    p_node_activation(Node,Msg);%$TWP);
 	_ -> 
+	    %LOG("no such node as ~p : ~p",[Type,self()])
 	    io:format("no such node as ~p:~p",[Type,self()])
     end.
 
@@ -149,6 +153,9 @@ relink_to_alpha_memory(Node,Amem,Ancestor)->               %join or negative
 relink_to_beta_memory(JNode,Bmem) ->
     gen_server:cast(Bmem,{rlb,JNode}).  %relink
     
+%link_to(Node,Tnode) ->
+%    gen_server:cast(Tnode,{ln,Node}).
+
 dislink_to(Node,FNode) ->
     gen_server:cast(FNode,{dl,Node}).
 dislink_left(Node) ->
@@ -167,35 +174,33 @@ remove(token,Token_ref,Node) ->
     gen_server:cast(Node,{rt,Token_ref}).
 
 quarry_mem(am,Node) ->
-    runes_kb:get_am(Node);
+    quarry_am(Node);
 quarry_mem(bm,Node) ->
-    runes_kb:get_bm(Node).
+    quarry_bm(Node).
 
 quarry_am(Am) ->
-    runes_kb:get_am(Am).
-%    case ets:lookup(list_to_atom(pid_to_list(Am)),am) of
-%	[{am,Mem}] ->
-%	    Mem;
-%	[] ->
-%	    []
-%   end.
+%    runes_kb:get_am(Am).
+    case ets:lookup(list_to_atom(pid_to_list(Am)),am) of
+	[{am,Mem}] ->
+	    Mem;
+	[] ->
+	    []
+    end.
 
 quarry_bm(Bm) ->
-    runes_kb:get_bm(Bm).
-%    case ets:lookup(list_to_atom(pid_to_list(Bm)),bm) of
-%	[{bm,Mem}] ->
-%	    Mem;
-%	[] ->
-%	    []
-%    end.
+%    runes_kb:get_bm(Bm).
+    case ets:lookup(list_to_atom(pid_to_list(Bm)),bm) of
+	[{bm,Mem}] ->
+	    Mem;
+	[] ->
+	    []
+    end.
 
 set_am(Am,Mem) ->
-    runes_kb:set_am(Am,Mem).
-%   ets:insert(list_to_atom(pid_to_list(Am)),{am,Mem}).
+    ets:insert(list_to_atom(pid_to_list(Am)),{am,Mem}).
 
 set_bm(Bm,Mem) ->
-    runes_kb:set_bm(Bm,Mem).
- %   ets:insert(list_to_atom(pid_to_list(Bm)),{bm,Mem}).
+    ets:insert(list_to_atom(pid_to_list(Bm)),{bm,Mem}).
 
 remove_am(Am) ->
     runes_kb:delete(am,Am).
@@ -209,7 +214,7 @@ quarry_child_as(Node,As) ->
     gen_server:call(Node,{qc,As}).
 
 is_am_nil(Am) ->
-    Mem = runes_kb:get_am(Am),
+    Mem = quarry_am(Am),
     if Mem == [] ->
 	    true;
        true ->
@@ -217,7 +222,7 @@ is_am_nil(Am) ->
     end.
 
 is_bm_nil(Bm) ->
-    Mem = runes_kb:get_bm(Bm),
+    Mem = quarry_bm(Bm),
     if Mem == [] ->
 	    true;
        true ->
@@ -314,6 +319,11 @@ handle_cast({ca,Wme_ref}, State) ->
     {noreply,State};
 
 handle_cast({pa,{Tl,N}},State0) ->
+    %$ Ntrs = lists:flatten(lists:map(fun({Trs,Wr}) ->
+%$					   lists:map(fun(Tr) ->
+%$							     runes_kb:make_token(self(),Tr,Wr)
+%$						     end,Trs)
+%$				   end,TWP)),    
     Trs0 = State0#p_node.token_refs,
     %$Trs1 = Ntrs ++ Trs0,
     Trs1 = 
@@ -330,6 +340,12 @@ handle_cast({pa,{Tl,N}},State0) ->
     {noreply,State1};
 
 handle_cast({bla,{Tl,N}},State) ->
+%$    Ntrs = lists:flatten(lists:map(fun({Trs,Wr}) ->
+%$					   lists:map(fun(Tr) ->
+%$							     runes_kb:make_token(self(),Tr,Wr)
+%$						     end,Trs)
+%$				   end,TWP)),    
+    %New_token_ref = runes_kb:make_token(self(),Token_ref,Wme_ref),
     Trs = quarry_bm(self()),
     %$Trs1 = Ntrs++Token_refs,
     Trs1 = 
@@ -360,19 +376,39 @@ handle_cast({jla,{Tl,N},Flag},State) ->
     {Bm,b} = State#rete_node.parent,   %%%%%%type
     Tests = Join_part#join.tests,
     Mem = quarry_am(Amem),
-   % if Flag ->
-%	    {ok,Ancesotr} = find_ancestor(State),
-%	    relink_to_alpha_memory({self(),j},Amem,Ancesotr),
-%	    if Mem == [] ->
-%		    dislink_to(self(),Bm) ; %%% dislink
-%	       true ->
-%		    ok
-%	    end;
- %      true ->
-%	   % Isnil = false
-%	    ok
- %   end,
+    if Flag ->
+	    %{ok,Isnil} = is_mem_nil(Amem),
+	    {ok,Ancesotr} = find_ancestor(State),
+	    relink_to_alpha_memory({self(),j},Amem,Ancesotr),
+	    %{ok, Isnil} = is_mem_nil(Amem),
+	    %if Isnil -> 
+	    if Mem == [] ->
+		    dislink_to(self(),Bm) ; %%% dislink
+	       true ->
+		    ok
+	    end;
+       true ->
+	   % Isnil = false
+	    ok
+    end,
+    %if not(Isnil) ->
+%%    lists:foreach(fun(Wr) ->
+%%			  Pass_or_no = perform_join_tests(Tests,Tr,Wr),
+%%			  if Pass_or_no ->
+%%				  Children = State#rete_node.children,
+%%				  lists:foreach(fun(Pair) ->			   
+%%							left_activation(Pair,Tr,Wr,off)
+%%						end,Children);
+%%			     true -> ok
+%%			  end
+%%		  end,Mem),
     Children = State#rete_node.children,
+  %$  TWP =  lists:foldl(fun(Wr,Acc) ->
+  %$			       Ntrs = lists:filter(fun(Tr) ->
+  %$							   perform_join_tests(Tests,Tr,Wr)
+  %$						   end,Trs),
+  %$			       [{Ntrs,Wr}|Acc]
+  %$		       end,[],Mem),
     Re = runes_match:lperform_join_tests(Tests,Tl,Mem),
     if Re /= [] ->
 	    lists:foreach(fun(Pair) ->
@@ -389,17 +425,21 @@ handle_cast({jra,{Wr,N},Flag},State) ->
     {Bm,b} = State#rete_node.parent,    %should be beta_memory type
     Tests = Join_part#join.tests,
     Mem = quarry_bm(Bm),
-%    if Flag ->
-%	    relink_to_beta_memory(self(),Bm),
-%	    if Bm == [] -> 
-%		    dislink_to(self(),Amem);   %%%dislink
-%	       true -> ok			
-%	    end;
- %      true ->
-%	    %Isnil = false
-%	    ok
-%    end,
+    if Flag ->
+	    %{ok,Isnil} = is_mem_nil(Bm),
+	    relink_to_beta_memory(self(),Bm),
+	    if Bm == [] -> 
+		    dislink_to(self(),Amem);   %%%dislink
+	       true -> ok			
+	    end;
+       true ->
+	    %Isnil = false
+	    ok
+    end,
 
+   %$ Trs =  lists:filter(fun(Tr) ->
+   %$				perform_join_tests(Tests,Tr,Wr)
+   %$			end,Mem),
     Re = runes_match:rperform_join_tests(Tests,Mem,[Wr]),
     if Re /= [] ->
 	    Children = State#rete_node.children,
@@ -409,6 +449,16 @@ handle_cast({jra,{Wr,N},Flag},State) ->
        true ->
 	    ok
     end,
+%%    lists:foreach(fun(Tr) ->
+%%			  Pass_or_no = perform_join_tests(Tests,Tr,Wr),
+%%			  if Pass_or_no ->
+%%				  Children = State#rete_node.children,
+%%				  lists:foreach(fun(Pair) ->
+%%							left_activation(Pair,Tr,Wr,off)	
+%%						end,Children);
+%%			     true -> ok
+%%			  end
+%%		  end,Mem),
     {noreply,State};
 
 handle_cast({fra,New},State) ->
@@ -743,17 +793,7 @@ handle_call({ul,Type},{From,_},State0) ->   %Node = {NPid,Type}
 	_ ->	    
 	    io:format("no such node in ~p ~n",Tp),
 	    {reply,{ok,false},State0}
-    end;
-handle_call(fa,From,State) -> 
-    Type = type_of(State),
-    case Type of
-	j ->
-	    Re = find_ancestor(State);
-	_ ->
-	    Re = nil,
-	    io:format("no such type of node in fa~n")
-    end,
-    {reply,Re,State}.
+    end.
 
 handle_info(timeout,State) ->
     ok,
@@ -861,7 +901,7 @@ find_ancestor(State) ->
 	    if Ancestor0 /= nil ->
 		    {ok,Y_or_n} = is_right_unlinked(Amem),
 		    if Y_or_n ->
-			    {ok,Ancestor1} = gen_server:call(Ancestor0,fa),
+			    {ok,Ancestor1} = find_ancestor(Ancestor0),
 			    if Ancestor1 == nil ->
 				    Return = Ancestor0;
 			       true ->
@@ -964,17 +1004,9 @@ get_value_of_p(Key,State) ->
 
 take_if(_,[]) -> {ok,nil};
 take_if(Pred,[T|Ts]) ->
-    Bool = Pred(T),
+    Bool = apply(Pred,[T]),
     if Bool -> {ok,T};
        true -> take_if(Pred,Ts)
-    end.
-
-take_if2(Pred,Ts) ->
-    Re = runes_p:pfilter(Pred,Ts),
-    if Re == [] ->
-	    {ok,nil};
-       true ->
-	    {ok, lists:nth(1,Re)}
     end.
 
 delete_node_step1(State) ->
