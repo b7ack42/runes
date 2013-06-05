@@ -16,45 +16,58 @@ build_dummy_top_node_only_once() ->
     {ok,Dn} = runes_engine:create(dummy_top_node,Paras),
     Dn.
 
-build_or_share_constant_test_node(root_node,Fi,Va) ->
-    {ok,Root} = runes_agenda:get_root(),
-    build_or_share_constant_test_node(Root,Fi,Va);
-build_or_share_constant_test_node(Parent,Fi,Va) ->
+build_or_share_constant_test_node(root_node,Fi,Va,_Where) ->
+    {_,Class} = Va,
+    Wh = runes_kb:find_class(Class),
+    if Wh /= no_class ->
+	    Where = Wh;
+       true ->
+	    [_F|T] = nodes(),
+	    Nodes = [node()|T],
+	    Where = lists:nth(random:uniform(length(Nodes)),Nodes)
+    end,
+    {ok,Root} = runes_agenda:get_root_and_set_class(Where,Class),
+    build_or_share_constant_test_node(Root,Fi,Va,Where);
+build_or_share_constant_test_node(Parent,Fi,Va,Where) ->
     {Tag,Val} = Va,
     if Tag == con ->
 	    {ok,Re} = runes_engine:quarry_child_as(Parent,{c,Fi,Val}),
 	    if Re /= nil ->
-		    Re;
+		    {Re,Where};
 	       true ->
 		    Paras = #constant_test_node{field = Fi,
 						value = Val,
 						out_put_mem = nil,
 						parent = Parent,
 						children = []},
-		    {ok,New} = runes_engine:create(constant_test_node,Paras),
+		    %{ok,New} = runes_engine:create(constant_test_node,Paras),
+		    {ok,New} = runes_agenda:create_node(Where,
+							ctn,
+							Paras),
 		    runes_engine:c_linkto_pc(New,Parent),
-		    runes_agenda:inc_node_num(ctn),
-		    New
+		    %runes_agenda:inc_node_num(ctn),
+		    {New,Where}
 	    end;
        true ->
-	    Parent
+	    {Parent,Where}
     end.
 
-build_or_share_alpha_memory(Cond)->
+build_or_share_alpha_memory(Cond,_Where)->
     %#fields{id=Id,attr=Attr,value=Val} = Cond,
     %Ls = [{id,Id},{attr,Attr},{value,Val}],
-    Cur_n = lists:foldl(fun({F,V},Cur)->
-				build_or_share_constant_test_node(Cur,F,V)
-			end, root_node,Cond),
+    {Cur_n,Where} = lists:foldl(fun({F,V},{Cur,Where})->
+				build_or_share_constant_test_node(Cur,F,V,Where)
+			end, {root_node,nil},Cond),
     {ok,[{o,Om}]} = runes_engine:quarry_keys(Cur_n,[o]),
     if Om /= nil ->
-	    Om;
+	    {Om,Where};
        true ->
 	    Paras = #alpha_memory{succs = [],
 				  parent = Cur_n,
 				  ref_count = 0,
 				  wme_refs = []},
-	    {ok,Am} = runes_engine:create(alpha_memory,Paras),
+	    %{ok,Am} = runes_engine:create(alpha_memory,Paras),
+	    {ok,Am} = runes_agenda:create_node(Where,am,Paras),
 	    runes_engine:a_linkto_pc(Am,Cur_n),
 	    Wrs = runes_kb:get_all_wme_refs(),
 	    lists:foreach(fun(Wr) ->
@@ -63,14 +76,12 @@ build_or_share_alpha_memory(Cond)->
 					  runes_engine:alpha_memory_activation(Am,Wr)
 				  end
 			  end,Wrs),
-	    runes_agenda:inc_node_num(am),
-	    %ets:new(list_to_atom(pid_to_list(Am)),
-	%	    [public,named_table,{read_concurrency,true}]), 
-	    Am		
+	    %runes_agenda:inc_node_nSum(am),
+	   {Am,Where}		
     end.   
 
-build_or_share_beta_memory_node(dummy_top_node) ->
-    {ok,Dn} = runes_agenda:get_dummy_top_node(),
+build_or_share_beta_memory_node(dummy_top_node,Where) ->
+    {ok,Dn} = runes_agenda:get_dummy_top_node(Where),
     {ok,Ch} = runes_engine:quarry_child_as(Dn,b),
     if Ch /= nil ->
 	    Ch;
@@ -80,16 +91,14 @@ build_or_share_beta_memory_node(dummy_top_node) ->
 			       children=[],
 			       parent={Dn,d},
 			       variant = Bm},
-	    {ok,Bnew} = runes_engine:create(beta_memory,Paras),
-	    %Name = list_to_atom(pid_to_list(Bnew)),
-	    %ets:new(Name,[public,named_table,{read_concurrency,true}]),
+%	    {ok,Bnew} = runes_engine:create(beta_memory,Paras),
+	    {ok,Bnew} = runes_agenda:create_node(Where,bm,Paras),
 	    runes_engine:set_bm(Bnew,[nil]),
-	    %ets:insert(list_to_atom(pid_to_list(Bnew)),{bm,[nil]}),
 	    runes_engine:b_linkto_p(Bnew,Dn),
-	    runes_agenda:inc_node_num(bm),
+	    %runes_agenda:inc_node_num(bm),
 	    {Bnew,b}
     end;
-build_or_share_beta_memory_node({Parent,Type}) ->
+build_or_share_beta_memory_node({Parent,Type},Where) ->
     {ok,Ch} = runes_engine:quarry_child_as(Parent,b),
     if Ch /= nil ->
 	    Ch;
@@ -99,16 +108,17 @@ build_or_share_beta_memory_node({Parent,Type}) ->
 			       children=[],
 			       parent={Parent,Type},
 			       variant = Bm},
-	    {ok,Bnew} = runes_engine:create(beta_memory,Paras),
+	    %{ok,Bnew} = runes_engine:create(beta_memory,Paras),
+	    {ok,Bnew} = runes_agenda:create_node(Where,bm,Paras),
 	    %Name = list_to_atom(pid_to_list(Bnew)),
 	    %ets:new(Name,[public,named_table,{read_concurrency,true}]),
 	    runes_engine:b_linkto_p(Bnew,Parent),
 	    update_new_node_with_matches_from_above({Bnew,b}),
-	    runes_agenda:inc_node_num(bm),
+	    %runes_agenda:inc_node_num(bm),
 	    {Bnew,b}
     end.
 
-build_or_share_p_node({Pa,Type},Rule) ->
+build_or_share_p_node({Pa,Type},Rule,Where) ->
     #rule{name = Na,rhs= Rhs} = Rule,
     {ok,Ch} = runes_engine:quarry_child_as(Pa,{p,Na}),
     if Ch /= nil ->
@@ -118,10 +128,11 @@ build_or_share_p_node({Pa,Type},Rule) ->
 			    rule_name= Na,
 			    token_refs = [],
 			    action = Rhs},
-	    {ok,Pn} = runes_engine:create(p_node,Paras),
+	   % {ok,Pn} = runes_engine:create(p_node,Paras),
+	    {ok,Pn} = runes_agenda:create_node(Where,pn,Paras),
 	    runes_engine:pn_linkto_p(Pn,Pa),
 	    runes_agenda:put_pn(Na,Pn),
-	    runes_agenda:inc_node_num(pn),
+	    %runes_agenda:inc_node_num(pn),
 	    {Pn,p}
     end.
 	    
@@ -197,7 +208,7 @@ find_nearest_ancestor_with_same_amem(Nt,Am)->
 	    end
     end.
 
-build_or_share_join_node({Parent,Type},Am,Tests) ->
+build_or_share_join_node({Parent,Type},Am,Tests,Where) ->
     {ok,Ch} = runes_engine:quarry_child_as(Parent,{j,Am,Tests}),
     if Ch /= nil ->
 	    Ch;
@@ -211,7 +222,8 @@ build_or_share_join_node({Parent,Type},Am,Tests) ->
 			       children = [],
 			       parent = {Parent,Type},
 			       variant = Jn},
-	    {ok,New} = runes_engine:create(join,Paras),
+	    %{ok,New} = runes_engine:create(join,Paras),
+	    {ok,New} = runes_agenda:create_node(Where,jn,Paras),
 	    %Bm_nil = runes_engine:is_bm_nil(Parent),
 	    %if Bm_nil ->
 	%	    Am_nil = false;
@@ -222,7 +234,7 @@ build_or_share_join_node({Parent,Type},Am,Tests) ->
 	    Am_nil = false,
 	    runes_engine:j_linkto_p(New,Parent,Am_nil),
 	    runes_engine:j_linkto_a(New,Am,Bm_nil),
-	    runes_agenda:inc_node_num(jn),
+	    %runes_agenda:inc_node_num(jn),
 	    {New,j}
     end.
 	
@@ -236,12 +248,15 @@ build_or_share_network_for_conditions(Pa,Conds,EConds) ->
 one_step_build(Cond,{Cur_n,Conds_h}) ->
    % case Cond of
 %	positive ->
-	    Cur_nn = build_or_share_beta_memory_node(Cur_n),
-	    {ok,Tests} = get_join_tests_from_condition(Cond,Conds_h),
-	    Am = build_or_share_alpha_memory(Cond),
-	    Cur_nnn = build_or_share_join_node(Cur_nn,Am,Tests),
-	    Conds_hh = [Cond|Conds_h],
-	    {Cur_nnn,Conds_hh}.
+%    [_|T] = nodes(),
+%    Nodes = [node()|T],
+%    Node = lists:nth(random:uniform(lenght(Nodes)),Nodes),
+    {Am,Where} = build_or_share_alpha_memory(Cond,wherenil),
+    Cur_nn = build_or_share_beta_memory_node(Cur_n,Where),
+    {ok,Tests} = get_join_tests_from_condition(Cond,Conds_h),
+    Cur_nnn = build_or_share_join_node(Cur_nn,Am,Tests,Where),
+    Conds_hh = [Cond|Conds_h],
+    {Cur_nnn,Conds_hh}.
 %	_ ->
 %	    {fail,no_such_cond}
  %   end.
@@ -250,9 +265,13 @@ one_step_build(Cond,{Cur_n,Conds_h}) ->
     
     
 add_production(Rule) ->
+    random:seed(erlang:now()),
     Lhs =  Rule#rule.lhs,
     Cur_n = build_or_share_network_for_conditions(dummy_top_node,Lhs,[]),
-    P_node = build_or_share_p_node(Cur_n,Rule),
+    [_|T] = nodes(),
+    Nodes = [node()|T],
+    P_node = build_or_share_p_node(Cur_n,Rule,lists:nth(random:uniform(length(Nodes)),
+							Nodes)),
     update_new_node_with_matches_from_above(P_node).
 
 update_new_node_with_matches_from_above(New) -> 

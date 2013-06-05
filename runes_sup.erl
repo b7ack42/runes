@@ -11,10 +11,10 @@
 -define(SERVER, ?MODULE).
 
 start_link() ->
-    supervisor:start_link({global, ?SERVER}, ?MODULE, []).
+    supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
 start_child(Type,Paras ) ->
-    supervisor:start_child({global, ?SERVER},[Type, Paras]). 
+    supervisor:start_child(?SERVER,[Type, Paras]). 
 
 init([]) ->
     Rete_node = {runes_engine, {runes_engine, start_link, []},

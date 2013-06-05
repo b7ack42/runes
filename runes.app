@@ -10,6 +10,6 @@
 	      runes
 	      ]},
    {registered,[runes_sup]},
-   {application,[kernel,stdlib]},
+   {application,[kernel,stdlib,mnesia,resource_discovery]},
    {mod, {runes_app,[]}}
    ]}.

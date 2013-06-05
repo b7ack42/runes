@@ -10,7 +10,7 @@
 	 left_activation/3,
 	 right_activation/3,
 	 fake_right_activation/2,
-	 root_activation/1,
+	 root_activation/2,
 	 constant_test_node_activation/2,
 	 alpha_memory_activation/2,
 	 delete/1,
@@ -62,10 +62,16 @@ start_link(_Type,Paras) ->
 
 add_wme(Wme) ->
     Wme_ref = runes_kb:make_wm_ref(Wme),
-    root_activation(Wme_ref).
+    [{class,Class}|_] = Wme#wme.fields,
+    Where = runes_kb:find_class(Class),
+    if Where /= no_node ->
+	    root_activation(Wme_ref,Where);
+       true ->
+	    ok
+    end.
 
-root_activation(Wr) ->
-    {ok,Root} = runes_agenda:get_root(),
+root_activation(Wr,Where) ->
+    {ok,Root} = runes_agenda:get_root_and_set_class(Where,nil),
     gen_server:cast(Root,{ra,Wr}).
     
 constant_test_node_activation(CNode,Wme_ref) ->
@@ -265,6 +271,8 @@ init([Paras]) ->
 
 handle_cast({ra,Wr},State) ->
     Chn = State#root_node.children,
+    %{ok,Pl} = runes_agenda:get_process_set(node()),
+    %runes_agenda:loop(Pl),
     lists:foreach(fun(Ch) -> constant_test_node_activation(Ch,Wr)
 		  end,Chn),
     {noreply,State};
@@ -292,15 +300,15 @@ handle_cast({ca,Wme_ref}, State) ->
 			out_put_mem = Om,
 			children = Chn} = State,
     if 	Fi /= no_test ->
-	    Wme = runes_kb:get_wme(Wme_ref),	    
- 	    V2 = runes_kb:get_f(Wme,Fi),
+	    Wme = runes_kb:get_wme(Wme_ref),
+	    V2 = runes_kb:get_f(Wme,Fi),
 	   % io:format("~p v: ~p, va: ~p~n",[self(),V2, Va]),
- 	    if V2 /= Va ->
- 		    Flag = 0;
- 	       true  ->
- 		    Flag = 1
- 	    end;
- 	true -> Flag = 1
+	    if V2 /= Va ->
+		    Flag = 0;
+	       true  ->
+		    Flag = 1
+	    end;
+	true -> Flag = 1
     end,
     if Flag == 1 ->
 	    if Om /= nil -> 

@@ -24,11 +24,17 @@ add_fact(Fact) ->
 
 info() ->
     runes_agenda:show_working_memory(),
+    io:format("All classes: ~p~n",[runes_agenda:get_class_set(node())]),
     runes_agenda:get_node_num(all_nodes).
 
 fire() ->
-    runes_agenda:get_conflict_set().
-
+    [_|T] = nodes(),
+    Nodes = [node()|T],
+    lists:map(fun(N) ->
+		      {ok,CSet} = runes_agenda:get_conflict_set(N),
+		      io:format("the length of conflict_set at ~p: ~p~n",[N,length(CSet)]),
+		      {N,CSet}
+	      end,Nodes).
     
 
 
