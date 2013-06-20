@@ -64,7 +64,7 @@ add_wme(Wme) ->
     Wme_ref = runes_kb:make_wm_ref(Wme),
     [{class,Class}|_] = Wme#wme.fields,
     Where = runes_kb:find_class(Class),
-    if Where /= no_node ->
+    if Where /= no_class ->
 	    root_activation(Wme_ref,Where);
        true ->
 	    ok

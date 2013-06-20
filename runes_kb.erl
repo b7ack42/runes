@@ -78,21 +78,21 @@ make_token(Node,Tr,Wr) ->
   
 insert(class,Class,Where) ->
    %5 mnesia:dirty_write(#class_store{class=Class,node=Where});
-    mnesia:transaction(
+    mnesia:sync_transaction(
       fun()->
 	      mnesia:write(#class_store{class=Class,node=Where})
       end);
 insert(wm, Ref, Wme) ->
    %5 mnesia:dirty_write(#wm_store{wr=Ref,wme=Wme});
 %    ets:insert(wm_store,{Ref, Wme});
-    mnesia:transaction(
+    mnesia:sync_transaction(
       fun() ->
 	      mnesia:write(#wm_store{wr=Ref,wme=Wme})
       end);    
 insert(token, Ref, Token) ->
 %5    mnesia:dirty_write(#token_store{tr=Ref,token=Token}).
  %   ets:insert(token_store, {Ref, Token}).
-    mnesia:transaction(
+    mnesia:sync_transaction(
       fun() ->
 	      mnesia:write(#token_store{tr=Ref,token=Token})
       end).
@@ -142,6 +142,9 @@ find_class(Class) ->
 	    no_class
     end.
 
+locate_class(Class,Where) ->
+    insert(class,Class,Where).
+
 get_wme(Ref) ->
 %   case ets:lookup(wm_store,Ref) of
     case mnesia:dirty_read(wm_store,Ref) of
@@ -153,9 +156,9 @@ get_wme(Ref) ->
 %5		  fun() ->
 %5			  mnesia:read(wm_store,Ref)
 %5		  end),
-%	    Wrs = get_all_wme_refs(),
-%	    Bool = lists:member(Ref,Wrs),
-%	    io:format("NO WME FOUND: ~p Bool: ~p~n",[Ref,Bool]),
+	    Wrs = get_all_wme_refs(),
+	    Bool = lists:member(Ref,Wrs),
+	    io:format("WME FOUND: ~p Bool: ~p~n",[Ref,Bool]),
 	   no_wme
 %5	    Wme.
    end.
@@ -198,10 +201,16 @@ get_nth_wr_from_token(Token_ref,Nth) ->
     get_nth_wr_from_token(Parent_r,Nth1).
 
 get_all_wme_refs() ->
+%    {atomic,Wrs} = 
+%	mnesia:transaction(
+%	  fun() ->
+%		  mnesia:select(wm_store,[{#wm_store{wr='$1',wme='_'},[],['$1']}])
+%	  end),
+%    Wrs.
     {atomic,Wrs} = 
 	mnesia:transaction(
-	  fun() ->
-		  mnesia:select(wm_store,[{#wm_store{wr='$1',wme='_'},[],['$1']}])
+	  fun()->
+		  mnesia:all_keys(wm_store)
 	  end),
     Wrs.
 
@@ -209,7 +218,8 @@ get_all_token_refs() ->
     {atomic,Trs} = 
 	mnesia:transaction(
 	  fun() ->
-		  mnesia:select(token_store,[{#token_store{tr='$1',token='_'},[],['$1']}])
+		 % mnesia:select(token_store,[{#token_store{tr='$1',token='_'},[],['$1']}])
+		  mnesia:all_keys(token_store)
 	  end),
     Trs.
 
@@ -217,8 +227,8 @@ find_all_classes() ->
     {atomic,Class_Nodes} = 
 	mnesia:transaction(
 	  fun() ->
-		  mnesia:select(class_store,[{#class_store{class='$1',node='$2'},
-					      [],['$$']}])
+%		  mnesia:select(class_store,[{#class_store{class='$1',node='$2'},[],['$$']}])
+		  mnesia:all_keys(class_store)
 	  end),
     Class_Nodes.
 

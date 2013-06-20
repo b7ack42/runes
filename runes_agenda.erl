@@ -87,13 +87,17 @@ handle_call({new,Type,Paras},_From,State) ->
     {reply,{ok,Pro},State#agenda{process_set=[Pro|Pset0]}};
 
 handle_call({root,Class},_From,State) ->
-    Old_Classes = State#agenda.class_set,
-    Where = runes_kb:find_class(Class),
-    if Where =:= no_class ->
-	    runes_kb:insert(class,Class,node()),
-	    {reply,
-	     get_rn(),
-	     State#agenda{class_set = [Class|Old_Classes]}};
+    if Class /= nil ->
+	    Old_Classes = State#agenda.class_set,
+	    Where = runes_kb:find_class(Class),
+	    if Where =:= no_class ->
+		    runes_kb:insert(class,Class,node()),
+		    {reply,
+		     get_rn(),
+		     State#agenda{class_set = [Class|Old_Classes]}};
+	       true ->
+		    {reply,get_rn(),State}
+	    end;
        true ->
 	    {reply,get_rn(),State}
     end;

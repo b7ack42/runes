@@ -20,13 +20,14 @@ build_or_share_constant_test_node(root_node,Fi,Va,_Where) ->
     {_,Class} = Va,
     Wh = runes_kb:find_class(Class),
     if Wh /= no_class ->
-	    Where = Wh;
+	    Where = Wh,
+	    {ok,Root} = runes_agenda:get_root_and_set_class(Wh,nil);
        true ->
 	    [_F|T] = nodes(),
 	    Nodes = [node()|T],
-	    Where = lists:nth(random:uniform(length(Nodes)),Nodes)
+	    Where = lists:nth(random:uniform(length(Nodes)),Nodes),
+	    {ok,Root} = runes_agenda:get_root_and_set_class(Where,Class)
     end,
-    {ok,Root} = runes_agenda:get_root_and_set_class(Where,Class),
     build_or_share_constant_test_node(Root,Fi,Va,Where);
 build_or_share_constant_test_node(Parent,Fi,Va,Where) ->
     {Tag,Val} = Va,
@@ -73,7 +74,9 @@ build_or_share_alpha_memory(Cond,_Where)->
 	    lists:foreach(fun(Wr) ->
 				  Pass_or_no = perform_test(Wr,Cond),
 				  if Pass_or_no ->
-					  runes_engine:alpha_memory_activation(Am,Wr)
+					  runes_engine:alpha_memory_activation(Am,Wr);
+				     true ->
+					  ok					      
 				  end
 			  end,Wrs),
 	    %runes_agenda:inc_node_nSum(am),
