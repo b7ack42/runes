@@ -185,7 +185,11 @@ get_token(Ref) ->
 	    case mnesia:dirty_read(token_store,Ref) of
 		[{token_store,Ref,Token}] ->
 		    Token;
-		[] -> no_Token
+		[] ->
+		    Trs = get_all_token_refs(),
+		    Bool = lists:member(Ref,Trs),
+		    io:format("Tr ~p FOUND: ~p~n",[Ref,Bool]),
+		    no_Token
 	    end
     end.
 

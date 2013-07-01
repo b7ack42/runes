@@ -22,7 +22,8 @@
 		 owner}).
 
 init() ->
-    application:start(mnesia),
+    %application:start(mnesia),
+    random:seed(erlang:now()),
     application:start(resource_discovery),
     application:start(runes).
    % appmon:start().

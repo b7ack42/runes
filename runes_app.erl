@@ -15,7 +15,7 @@ start(_StartType, _StartArgs) ->
     runes_kb:init(),
     io:format("success"),
     case runes_sup:start_link() of
-	{ok,Pid} ->
+.	{ok,Pid} ->
 	    io:format("success"),
 	    runes_agenda:start(),
 	    {ok, Pid};
